@@ -1,0 +1,5 @@
+{
+  "name": "Real-time Messenger",
+  "description": "A real-time messenger with real authentication and registration using JWT and SQLite.",
+  "requestFramePermissions": []
+}
