@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Hash, Users, MessageCircle } from 'lucide-react';
+import { Send, Hash, Users, MessageCircle, Settings as SettingsIcon, UserPlus, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export default function ChatArea({ chat, user, onlineUsers }: any) {
@@ -7,6 +7,10 @@ export default function ChatArea({ chat, user, onlineUsers }: any) {
   const [newMessage, setNewMessage] = useState('');
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [otherUserLastRead, setOtherUserLastRead] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [newMemberUsername, setNewMemberUsername] = useState('');
+  const [settingsMessage, setSettingsMessage] = useState('');
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const typingChannelRef = useRef<any>(null);
@@ -101,7 +105,7 @@ export default function ChatArea({ chat, user, onlineUsers }: any) {
       supabase.removeChannel(typingChannel);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-  }, [chat.id]);
+  }, [chat?.id]);
 
   const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMessage(e.target.value);
@@ -185,12 +189,101 @@ export default function ChatArea({ chat, user, onlineUsers }: any) {
     }
   };
 
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSettingsMessage('');
+    
+    try {
+      // Find user by username
+      const { data: targetUser, error: findError } = await supabase
+        .from('profiles')
+        .select('id, allow_group_adds, allow_group_invites')
+        .eq('username', newMemberUsername)
+        .single();
+        
+      if (findError || !targetUser) {
+        setSettingsMessage('User not found.');
+        return;
+      }
+
+      // Check if already a member
+      const { data: existingMember } = await supabase
+        .from('chat_members')
+        .select('user_id')
+        .eq('chat_id', chat.id)
+        .eq('user_id', targetUser.id)
+        .single();
+
+      if (existingMember) {
+        setSettingsMessage('User is already a member.');
+        return;
+      }
+
+      if (targetUser.allow_group_adds !== false) {
+        // Add directly
+        const { error: addError } = await supabase
+          .from('chat_members')
+          .insert([{ chat_id: chat.id, user_id: targetUser.id }]);
+          
+        if (addError) throw addError;
+        setSettingsMessage('User added successfully!');
+      } else if (targetUser.allow_group_invites !== false) {
+        // Send invite
+        const { error: inviteError } = await supabase
+          .from('chat_invites')
+          .insert([{ chat_id: chat.id, inviter_id: user.id, invitee_id: targetUser.id }]);
+          
+        if (inviteError) throw inviteError;
+        setSettingsMessage('Invitation sent!');
+      } else {
+        setSettingsMessage('User does not allow group invites or adds.');
+      }
+      
+      setNewMemberUsername('');
+    } catch (err: any) {
+      console.error('Error adding member:', err);
+      setSettingsMessage(err.message || 'Failed to add member.');
+    }
+  };
+
   if (!chat) return null;
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-zinc-950">
+    <div className="flex-1 flex flex-col h-full bg-zinc-950 relative">
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-white">Group Settings</h2>
+              <button onClick={() => setShowSettings(false)} className="text-zinc-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-zinc-400 mb-3">Add Member by Username</h3>
+              <form onSubmit={handleAddMember} className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Username"
+                  value={newMemberUsername}
+                  onChange={e => setNewMemberUsername(e.target.value)}
+                  className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
+                  required
+                />
+                <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl flex items-center gap-2">
+                  <UserPlus size={16} /> Add
+                </button>
+              </form>
+              {settingsMessage && <p className="mt-2 text-sm text-indigo-400">{settingsMessage}</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
-      <header className="h-16 border-b border-zinc-800 flex items-center px-6 bg-zinc-900/50 backdrop-blur-md sticky top-0 z-10">
+      <header className="h-16 border-b border-zinc-800 flex items-center justify-between px-6 bg-zinc-900/50 backdrop-blur-md sticky top-0 z-10">
         <div className="flex items-center gap-4">
           <img src={chat.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${chat.id}`} alt="chat" className="w-10 h-10 rounded-full bg-zinc-800" />
           <div>
@@ -201,6 +294,15 @@ export default function ChatArea({ chat, user, onlineUsers }: any) {
             {chat.description && <p className="text-xs text-zinc-400">{chat.description}</p>}
           </div>
         </div>
+        
+        {(chat.type === 'group' || chat.type === 'channel') && (
+          <button 
+            onClick={() => setShowSettings(true)}
+            className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl transition-colors"
+          >
+            <SettingsIcon size={20} />
+          </button>
+        )}
       </header>
 
       {/* Messages */}
@@ -217,10 +319,10 @@ export default function ChatArea({ chat, user, onlineUsers }: any) {
                   {showAvatar && <img src={msg.avatar_url} alt="avatar" className="w-8 h-8 rounded-full bg-zinc-800" />}
                 </div>
               )}
-              <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[70%]`}>
+              <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[70%] min-w-0`}>
                 {!isMe && showAvatar && <span className="text-xs font-medium text-zinc-400 mb-1 ml-1">{msg.username}</span>}
-                <div className={`px-4 py-2.5 rounded-2xl ${isMe ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-zinc-800 text-zinc-100 rounded-tl-sm'} ${msg.isTemp ? 'opacity-70' : ''}`}>
-                  <p className="break-words text-sm leading-relaxed">{msg.content}</p>
+                <div className={`px-4 py-2.5 rounded-2xl ${isMe ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-zinc-800 text-zinc-100 rounded-tl-sm'} ${msg.isTemp ? 'opacity-70' : ''} max-w-full`}>
+                  <p className="break-words whitespace-pre-wrap text-sm leading-relaxed" style={{ wordBreak: 'break-word' }}>{msg.content}</p>
                 </div>
                 <div className="flex items-center gap-1 mt-1 mx-1">
                   <span className="text-[10px] text-zinc-500">
@@ -239,13 +341,13 @@ export default function ChatArea({ chat, user, onlineUsers }: any) {
         {typingUsers.size > 0 && (
           <div className="flex justify-start gap-3">
             <div className="w-8 flex-shrink-0"></div>
-            <div className="flex flex-col items-start max-w-[70%]">
+            <div className="flex flex-col items-start max-w-[70%] min-w-0">
               <div className="px-4 py-3 rounded-2xl bg-zinc-800 text-zinc-100 rounded-tl-sm flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
                 <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
                 <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
               </div>
-              <span className="text-[10px] text-zinc-500 mt-1 mx-1">
+              <span className="text-[10px] text-zinc-500 mt-1 mx-1 truncate w-full">
                 {Array.from(typingUsers).join(', ')} {typingUsers.size === 1 ? 'is' : 'are'} typing...
               </span>
             </div>
@@ -262,12 +364,12 @@ export default function ChatArea({ chat, user, onlineUsers }: any) {
             value={newMessage}
             onChange={handleTyping}
             placeholder="Write a message..."
-            className="flex-1 bg-zinc-800 border border-zinc-700 rounded-full px-6 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+            className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-full px-6 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
           />
           <button
             type="submit"
             disabled={!newMessage.trim()}
-            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white w-12 h-12 rounded-full flex items-center justify-center transition-colors"
+            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
           >
             <Send size={18} className="ml-1" />
           </button>

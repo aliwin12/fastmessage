@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { MessageSquare, Users, Settings as SettingsIcon, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import GlobalSearch from './GlobalSearch';
+import PublicProfileModal from './PublicProfileModal';
 
 export default function Sidebar({ user, activeTab, setActiveTab, chats, activeChat, onChatSelect, onChatsUpdate, onlineUsers }: any) {
   const [showCreate, setShowCreate] = useState(false);
   const [newChatName, setNewChatName] = useState('');
+  const [newChatUsername, setNewChatUsername] = useState('');
   const [newChatDesc, setNewChatDesc] = useState('');
   const [newChatType, setNewChatType] = useState('group');
+  const [selectedEntity, setSelectedEntity] = useState<any>(null);
 
   const handleCreateChat = async (e: any) => {
     e.preventDefault();
@@ -15,7 +19,14 @@ export default function Sidebar({ user, activeTab, setActiveTab, chats, activeCh
       
       const { data: chat, error: chatError } = await supabase
         .from('chats')
-        .insert([{ type: newChatType, name: newChatName, description: newChatDesc, avatar_url, owner_id: user.id }])
+        .insert([{ 
+          type: newChatType, 
+          name: newChatName, 
+          username: newChatUsername || null,
+          description: newChatDesc, 
+          avatar_url, 
+          owner_id: user.id 
+        }])
         .select()
         .single();
 
@@ -29,6 +40,7 @@ export default function Sidebar({ user, activeTab, setActiveTab, chats, activeCh
 
       setShowCreate(false);
       setNewChatName('');
+      setNewChatUsername('');
       setNewChatDesc('');
       onChatsUpdate();
     } catch (err) {
@@ -36,8 +48,59 @@ export default function Sidebar({ user, activeTab, setActiveTab, chats, activeCh
     }
   };
 
+  const handleStartChat = async (targetUserId: string) => {
+    try {
+      const { data: existingChats } = await supabase
+        .rpc('get_direct_chat', { user1: user.id, user2: targetUserId });
+
+      let chatId;
+      if (existingChats && existingChats.length > 0) {
+        chatId = existingChats[0].id;
+      } else {
+        const { data: newChat } = await supabase
+          .from('chats')
+          .insert([{ type: 'direct' }])
+          .select()
+          .single();
+        if (newChat) {
+          chatId = newChat.id;
+          await supabase.from('chat_members').insert([
+            { chat_id: chatId, user_id: user.id },
+            { chat_id: chatId, user_id: targetUserId }
+          ]);
+        }
+      }
+      onChatsUpdate();
+      setActiveTab('chats');
+    } catch (e) {
+      console.error('Error starting chat:', e);
+    }
+  };
+
+  const handleJoinGroup = async (chatId: string) => {
+    try {
+      await supabase.from('chat_members').insert([
+        { chat_id: chatId, user_id: user.id }
+      ]);
+      onChatsUpdate();
+      setActiveTab('chats');
+    } catch (e) {
+      console.error('Error joining group:', e);
+    }
+  };
+
   return (
-    <div className="w-80 bg-zinc-900 border-r border-zinc-800 flex flex-col h-full">
+    <div className="w-80 bg-zinc-900 border-r border-zinc-800 flex flex-col h-full relative">
+      {selectedEntity && (
+        <PublicProfileModal
+          entity={selectedEntity}
+          currentUser={user}
+          onClose={() => setSelectedEntity(null)}
+          onStartChat={handleStartChat}
+          onJoinGroup={handleJoinGroup}
+        />
+      )}
+
       {/* User Profile Summary */}
       <div className="p-4 border-b border-zinc-800 flex items-center gap-3">
         <img src={user.avatar_url} alt="avatar" className="w-10 h-10 rounded-full bg-zinc-800" />
@@ -46,6 +109,8 @@ export default function Sidebar({ user, activeTab, setActiveTab, chats, activeCh
           <p className="text-xs text-zinc-400 truncate">{user.bio}</p>
         </div>
       </div>
+
+      <GlobalSearch onSelectResult={setSelectedEntity} />
 
       {/* Tabs */}
       <div className="flex p-2 gap-1 border-b border-zinc-800">
@@ -86,6 +151,10 @@ export default function Sidebar({ user, activeTab, setActiveTab, chats, activeCh
             <form onSubmit={handleCreateChat} className="p-3 bg-zinc-800/50 border-y border-zinc-800">
               <input 
                 type="text" placeholder="Name" value={newChatName} onChange={e => setNewChatName(e.target.value)} required
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-sm mb-2 text-white focus:outline-none focus:border-indigo-500"
+              />
+              <input 
+                type="text" placeholder="Username (optional)" value={newChatUsername} onChange={e => setNewChatUsername(e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-sm mb-2 text-white focus:outline-none focus:border-indigo-500"
               />
               <input 

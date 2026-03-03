@@ -3,9 +3,13 @@ import { LogOut, Save, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export default function Settings({ user, onLogout, onUserUpdate }: any) {
-  const [avatarUrl, setAvatarUrl] = useState(user.avatar_url);
-  const [bio, setBio] = useState(user.bio);
+  const [avatarUrl, setAvatarUrl] = useState(user.avatar_url || '');
+  const [bannerUrl, setBannerUrl] = useState(user.banner_url || '');
+  const [username, setUsername] = useState(user.username || '');
+  const [bio, setBio] = useState(user.bio || '');
   const [status, setStatus] = useState(user.status || 'online');
+  const [allowGroupAdds, setAllowGroupAdds] = useState(user.allow_group_adds ?? true);
+  const [allowGroupInvites, setAllowGroupInvites] = useState(user.allow_group_invites ?? true);
   const [message, setMessage] = useState('');
 
   const handleSave = async (e: React.FormEvent) => {
@@ -13,7 +17,15 @@ export default function Settings({ user, onLogout, onUserUpdate }: any) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .update({ avatar_url: avatarUrl, bio, status })
+        .update({ 
+          avatar_url: avatarUrl, 
+          banner_url: bannerUrl,
+          username,
+          bio, 
+          status,
+          allow_group_adds: allowGroupAdds,
+          allow_group_invites: allowGroupInvites
+        })
         .eq('id', user.id)
         .select()
         .single();
@@ -48,11 +60,32 @@ export default function Settings({ user, onLogout, onUserUpdate }: any) {
 
           <form onSubmit={handleSave} className="space-y-6">
             <div>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Username</label>
+              <input
+                type="text"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                required
+              />
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-zinc-400 mb-2">Avatar URL</label>
               <input
                 type="text"
                 value={avatarUrl}
                 onChange={e => setAvatarUrl(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Banner URL</label>
+              <input
+                type="text"
+                value={bannerUrl}
+                onChange={e => setBannerUrl(e.target.value)}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
               />
             </div>
@@ -76,6 +109,32 @@ export default function Settings({ user, onLogout, onUserUpdate }: any) {
                 placeholder="e.g., Working, In a meeting, etc."
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
               />
+            </div>
+
+            <div className="pt-4 border-t border-zinc-800">
+              <h3 className="text-lg font-medium text-white mb-4">Privacy Settings</h3>
+              
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm font-medium text-white">Allow Group Adds</p>
+                  <p className="text-xs text-zinc-400">Can people add you directly to groups?</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={allowGroupAdds} onChange={e => setAllowGroupAdds(e.target.checked)} />
+                  <div className="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-white">Allow Group Invites</p>
+                  <p className="text-xs text-zinc-400">Can people send you group invitations?</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={allowGroupInvites} onChange={e => setAllowGroupInvites(e.target.checked)} />
+                  <div className="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+              </div>
             </div>
 
             {message && <p className="text-emerald-500 text-sm">{message}</p>}

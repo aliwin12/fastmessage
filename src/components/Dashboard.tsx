@@ -208,7 +208,7 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
         onlineUsers={onlineUsers}
       />
       
-      <main className="flex-1 flex flex-col relative">
+      <main className="flex-1 flex flex-col relative min-w-0">
         {fetchError && (
           <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-500/10 border border-red-500/50 text-red-500 px-4 py-2 rounded-lg z-50">
             Error loading chats: {fetchError}
