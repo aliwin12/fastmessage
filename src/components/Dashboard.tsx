@@ -6,6 +6,7 @@ import Contacts from './Contacts';
 import PublicProfileModal from './PublicProfileModal';
 import { MessageSquare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { parseMessageContent } from '../lib/messageUtils';
 
 interface DashboardProps {
   session: any;
@@ -38,6 +39,10 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
     // Initial check
     handleVisibilityChange();
 
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
@@ -62,6 +67,17 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
         // Don't notify if we are currently looking at this chat AND the page is visible/focused
         if (activeChat?.id === payload.new.chat_id && isPageVisible) return;
 
+        // Parse message content
+        const parsed = parseMessageContent(payload.new.content);
+        if (parsed.type !== 'message') return;
+
+        // Increment unread count for the chat
+        setChats(prevChats => prevChats.map(chat => 
+          chat.id === payload.new.chat_id 
+            ? { ...chat, unread_count: (chat.unread_count || 0) + 1 }
+            : chat
+        ));
+
         // Fetch sender info
         const { data: sender } = await supabase
           .from('profiles')
@@ -70,11 +86,20 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
           .single();
 
         if (sender) {
+          // Play sound
+          try {
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            audio.play().catch(e => console.error("Error playing sound:", e));
+          } catch (e) {}
+
           if (Notification.permission === 'granted') {
-            new Notification(`New message from ${sender.username}`, {
-              body: payload.new.content,
-              icon: '/vite.svg' // Optional: add an icon if you have one
-            });
+            const parsed = parseMessageContent(payload.new.content);
+            if (parsed.type === 'message') {
+              new Notification(`New message from ${sender.username}`, {
+                body: parsed.text || payload.new.content,
+                icon: '/vite.svg'
+              });
+            }
           }
         }
       })
@@ -127,7 +152,7 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
     try {
       const { data: chatMembers, error: cmError } = await supabase
         .from('chat_members')
-        .select('chat_id')
+        .select('chat_id, last_read_at')
         .eq('user_id', user.id);
 
       if (cmError) throw cmError;
@@ -142,9 +167,23 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
 
         if (chatsError) throw chatsError;
 
-        // Enrich direct chats with other user's info
+        // Enrich direct chats with other user's info and unread counts
         if (chatsData) {
           const enrichedChats = await Promise.all(chatsData.map(async (chat) => {
+            const memberInfo = chatMembers.find(cm => cm.chat_id === chat.id);
+            const lastReadAt = memberInfo?.last_read_at || new Date(0).toISOString();
+
+            const { count: unreadCount } = await supabase
+              .from('messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('chat_id', chat.id)
+              .neq('sender_id', user.id)
+              .gt('created_at', lastReadAt)
+              .not('content', 'ilike', '{"type":"reaction"%')
+              .not('content', 'ilike', '{"type":"delete"%');
+
+            let enrichedChat = { ...chat, unread_count: unreadCount || 0 };
+
             if (chat.type === 'direct') {
               const { data: otherMember } = await supabase
                 .from('chat_members')
@@ -161,11 +200,11 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
                   .single();
 
                 if (otherUser) {
-                  return { ...chat, name: otherUser.username, avatar_url: otherUser.avatar_url, other_user_id: otherMember.user_id };
+                  enrichedChat = { ...enrichedChat, name: otherUser.username, avatar_url: otherUser.avatar_url, other_user_id: otherMember.user_id };
                 }
               }
             }
-            return chat;
+            return enrichedChat;
           }));
           setChats(enrichedChats);
         }
@@ -182,6 +221,10 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
 
   const handleChatSelect = (chat: any) => {
     setActiveChat(chat);
+    // Reset unread count when selecting a chat
+    setChats(prevChats => prevChats.map(c => 
+      c.id === chat.id ? { ...c, unread_count: 0 } : c
+    ));
   };
 
   const handleStartChat = async (targetUserId: string) => {
