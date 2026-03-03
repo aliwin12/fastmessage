@@ -1,5 +1,8 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
+-- Ensure username column exists on chats
+ALTER TABLE public.chats ADD COLUMN IF NOT EXISTS username TEXT UNIQUE;
+
 CREATE OR REPLACE FUNCTION public.global_search(search_query TEXT)
 RETURNS TABLE (
   id UUID,

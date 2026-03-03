@@ -12,8 +12,11 @@ export default function Sidebar({ user, activeTab, setActiveTab, chats, activeCh
   const [newChatType, setNewChatType] = useState('group');
   const [selectedEntity, setSelectedEntity] = useState<any>(null);
 
+  const [createError, setCreateError] = useState<string | null>(null);
+
   const handleCreateChat = async (e: any) => {
     e.preventDefault();
+    setCreateError(null);
     try {
       const avatar_url = `https://api.dicebear.com/7.x/identicon/svg?seed=${newChatName}`;
       
@@ -43,8 +46,9 @@ export default function Sidebar({ user, activeTab, setActiveTab, chats, activeCh
       setNewChatUsername('');
       setNewChatDesc('');
       onChatsUpdate();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error creating chat:', err);
+      setCreateError(err.message || 'Failed to create chat');
     }
   };
 
@@ -149,6 +153,11 @@ export default function Sidebar({ user, activeTab, setActiveTab, chats, activeCh
 
           {showCreate && (
             <form onSubmit={handleCreateChat} className="p-3 bg-zinc-800/50 border-y border-zinc-800">
+              {createError && (
+                <div className="mb-2 p-2 bg-red-500/10 border border-red-500/50 text-red-500 text-xs rounded">
+                  {createError}
+                </div>
+              )}
               <input 
                 type="text" placeholder="Name" value={newChatName} onChange={e => setNewChatName(e.target.value)} required
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-sm mb-2 text-white focus:outline-none focus:border-indigo-500"

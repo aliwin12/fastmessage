@@ -10,15 +10,18 @@ export default function GlobalSearch({ onSelectResult }: GlobalSearchProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ exact: any[], fuzzy: any[] }>({ exact: [], fuzzy: [] });
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!query.trim()) {
       setResults({ exact: [], fuzzy: [] });
+      setSearchError(null);
       return;
     }
 
     const search = async () => {
       setLoading(true);
+      setSearchError(null);
       try {
         const { data, error } = await supabase.rpc('global_search', { search_query: query });
         if (error) throw error;
@@ -39,8 +42,9 @@ export default function GlobalSearch({ onSelectResult }: GlobalSearchProps) {
         });
         
         setResults({ exact, fuzzy });
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error searching:', err);
+        setSearchError(err.message || 'Search failed');
       } finally {
         setLoading(false);
       }
@@ -73,7 +77,9 @@ export default function GlobalSearch({ onSelectResult }: GlobalSearchProps) {
 
       {query && (
         <div className="absolute top-full left-0 right-0 mt-2 mx-3 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
-          {loading ? (
+          {searchError ? (
+            <div className="p-4 text-center text-sm text-red-400">{searchError}</div>
+          ) : loading ? (
             <div className="p-4 text-center text-sm text-zinc-400">Searching...</div>
           ) : results.exact.length > 0 || results.fuzzy.length > 0 ? (
             <div className="py-2">

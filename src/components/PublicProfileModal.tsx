@@ -13,10 +13,12 @@ interface PublicProfileModalProps {
 export default function PublicProfileModal({ entity, currentUser, onClose, onStartChat, onJoinGroup }: PublicProfileModalProps) {
   const [loading, setLoading] = useState(false);
   const [isContact, setIsContact] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   useEffect(() => {
     if (entity.entity_type === 'user') {
       checkContactStatus();
+      checkBlockStatus();
     }
   }, [entity]);
 
@@ -35,6 +37,21 @@ export default function PublicProfileModal({ entity, currentUser, onClose, onSta
     }
   };
 
+  const checkBlockStatus = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('blocks')
+        .select('*')
+        .eq('blocker_id', currentUser.id)
+        .eq('blocked_id', entity.id)
+        .single();
+      
+      if (data) setIsBlocked(true);
+    } catch (e) {
+      // Not blocked or error
+    }
+  };
+
   const handleAddContact = async () => {
     setLoading(true);
     try {
@@ -44,6 +61,23 @@ export default function PublicProfileModal({ entity, currentUser, onClose, onSta
       setIsContact(true);
     } catch (e) {
       console.error('Error adding contact:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBlockUser = async () => {
+    setLoading(true);
+    try {
+      if (isBlocked) {
+        await supabase.rpc('unblock_user', { user_to_unblock: entity.id });
+        setIsBlocked(false);
+      } else {
+        await supabase.rpc('block_user', { user_to_block: entity.id });
+        setIsBlocked(true);
+      }
+    } catch (e) {
+      console.error('Error toggling block status:', e);
     } finally {
       setLoading(false);
     }
@@ -79,6 +113,17 @@ export default function PublicProfileModal({ entity, currentUser, onClose, onSta
             <div className="flex gap-2">
               {entity.entity_type === 'user' && entity.id !== currentUser.id && (
                 <>
+                  <button 
+                    onClick={handleBlockUser}
+                    disabled={loading}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                      isBlocked 
+                        ? 'bg-red-500/20 text-red-500 hover:bg-red-500/30' 
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                    }`}
+                  >
+                    {isBlocked ? 'Unblock' : 'Block'}
+                  </button>
                   {!isContact && (
                     <button 
                       onClick={handleAddContact}

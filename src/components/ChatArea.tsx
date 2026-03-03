@@ -10,6 +10,8 @@ export default function ChatArea({ chat, user, onlineUsers }: any) {
   const [showSettings, setShowSettings] = useState(false);
   const [newMemberUsername, setNewMemberUsername] = useState('');
   const [settingsMessage, setSettingsMessage] = useState('');
+  const [isBlockedByOther, setIsBlockedByOther] = useState(false);
+  const [hasBlockedOther, setHasBlockedOther] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -20,6 +22,22 @@ export default function ChatArea({ chat, user, onlineUsers }: any) {
     
     fetchMessages();
     setTypingUsers(new Set());
+
+    // Check block status if direct chat
+    if (chat.type === 'direct' && chat.other_user_id) {
+      const checkBlockStatus = async () => {
+        const { data: blocks } = await supabase
+          .from('blocks')
+          .select('*')
+          .or(`and(blocker_id.eq.${user.id},blocked_id.eq.${chat.other_user_id}),and(blocker_id.eq.${chat.other_user_id},blocked_id.eq.${user.id})`);
+        
+        if (blocks) {
+          setHasBlockedOther(blocks.some(b => b.blocker_id === user.id));
+          setIsBlockedByOther(blocks.some(b => b.blocker_id === chat.other_user_id));
+        }
+      };
+      checkBlockStatus();
+    }
 
     // Update our last read
     supabase.from('chat_members')
@@ -295,86 +313,110 @@ export default function ChatArea({ chat, user, onlineUsers }: any) {
           </div>
         </div>
         
-        {(chat.type === 'group' || chat.type === 'channel') && (
-          <button 
-            onClick={() => setShowSettings(true)}
-            className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl transition-colors"
-          >
-            <SettingsIcon size={20} />
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {chat.type === 'direct' && (
+            <button 
+              onClick={async () => {
+                if (confirm('Are you sure you want to delete this chat for both users?')) {
+                  await supabase.rpc('delete_chat_for_all', { chat_id_to_delete: chat.id });
+                }
+              }}
+              className="px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-colors"
+            >
+              Delete Chat
+            </button>
+          )}
+          {(chat.type === 'group' || chat.type === 'channel') && (
+            <button 
+              onClick={() => setShowSettings(true)}
+              className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl transition-colors"
+            >
+              <SettingsIcon size={20} />
+            </button>
+          )}
+        </div>
       </header>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {messages.map((msg, idx) => {
-          const isMe = msg.sender_id === user.id;
-          const showAvatar = !isMe && (idx === 0 || messages[idx - 1].sender_id !== msg.sender_id);
-          const isRead = isMe && otherUserLastRead && new Date(msg.created_at) <= new Date(otherUserLastRead);
-          
-          return (
-            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} gap-3`}>
-              {!isMe && (
-                <div className="w-8 flex-shrink-0">
-                  {showAvatar && <img src={msg.avatar_url} alt="avatar" className="w-8 h-8 rounded-full bg-zinc-800" />}
-                </div>
-              )}
-              <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[70%] min-w-0`}>
-                {!isMe && showAvatar && <span className="text-xs font-medium text-zinc-400 mb-1 ml-1">{msg.username}</span>}
-                <div className={`px-4 py-2.5 rounded-2xl ${isMe ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-zinc-800 text-zinc-100 rounded-tl-sm'} ${msg.isTemp ? 'opacity-70' : ''} max-w-full`}>
-                  <p className="break-words whitespace-pre-wrap text-sm leading-relaxed" style={{ wordBreak: 'break-word' }}>{msg.content}</p>
-                </div>
-                <div className="flex items-center gap-1 mt-1 mx-1">
-                  <span className="text-[10px] text-zinc-500">
-                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                  {isMe && !msg.isTemp && (
-                    <span className={`text-[10px] ${isRead ? 'text-indigo-400' : 'text-zinc-600'}`}>
-                      {isRead ? 'Read' : 'Sent'}
-                    </span>
+      {isBlockedByOther ? (
+        <div className="flex-1 flex flex-col items-center justify-center bg-zinc-950 text-white p-6 text-center">
+          <div className="text-6xl mb-4">❌</div>
+          <h2 className="text-xl font-semibold mb-2">Этот пользователь вас заблокировал</h2>
+          <p className="text-zinc-400">Вы не можете написать пользователю, который вас заблокировал.</p>
+        </div>
+      ) : (
+        <>
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {messages.map((msg, idx) => {
+              const isMe = msg.sender_id === user.id;
+              const showAvatar = !isMe && (idx === 0 || messages[idx - 1].sender_id !== msg.sender_id);
+              const isRead = isMe && otherUserLastRead && new Date(msg.created_at) <= new Date(otherUserLastRead);
+              
+              return (
+                <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} gap-3`}>
+                  {!isMe && (
+                    <div className="w-8 flex-shrink-0">
+                      {showAvatar && <img src={msg.avatar_url} alt="avatar" className="w-8 h-8 rounded-full bg-zinc-800" />}
+                    </div>
                   )}
+                  <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[70%] min-w-0`}>
+                    {!isMe && showAvatar && <span className="text-xs font-medium text-zinc-400 mb-1 ml-1">{msg.username}</span>}
+                    <div className={`px-4 py-2.5 rounded-2xl ${isMe ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-zinc-800 text-zinc-100 rounded-tl-sm'} ${msg.isTemp ? 'opacity-70' : ''} max-w-full`}>
+                      <p className="break-words whitespace-pre-wrap text-sm leading-relaxed" style={{ wordBreak: 'break-word' }}>{msg.content}</p>
+                    </div>
+                    <div className="flex items-center gap-1 mt-1 mx-1">
+                      <span className="text-[10px] text-zinc-500">
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {isMe && !msg.isTemp && (
+                        <span className={`text-[10px] ${isRead ? 'text-indigo-400' : 'text-zinc-600'}`}>
+                          {isRead ? 'Read' : 'Sent'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {typingUsers.size > 0 && (
+              <div className="flex justify-start gap-3">
+                <div className="w-8 flex-shrink-0"></div>
+                <div className="flex flex-col items-start max-w-[70%] min-w-0">
+                  <div className="px-4 py-3 rounded-2xl bg-zinc-800 text-zinc-100 rounded-tl-sm flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                    <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  </div>
+                  <span className="text-[10px] text-zinc-500 mt-1 mx-1 truncate w-full">
+                    {Array.from(typingUsers).join(', ')} {typingUsers.size === 1 ? 'is' : 'are'} typing...
+                  </span>
                 </div>
               </div>
-            </div>
-          );
-        })}
-        {typingUsers.size > 0 && (
-          <div className="flex justify-start gap-3">
-            <div className="w-8 flex-shrink-0"></div>
-            <div className="flex flex-col items-start max-w-[70%] min-w-0">
-              <div className="px-4 py-3 rounded-2xl bg-zinc-800 text-zinc-100 rounded-tl-sm flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-              </div>
-              <span className="text-[10px] text-zinc-500 mt-1 mx-1 truncate w-full">
-                {Array.from(typingUsers).join(', ')} {typingUsers.size === 1 ? 'is' : 'are'} typing...
-              </span>
-            </div>
+            )}
+            <div ref={messagesEndRef} />
           </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
 
-      {/* Input */}
-      <div className="p-4 bg-zinc-900 border-t border-zinc-800">
-        <form onSubmit={handleSendMessage} className="flex gap-2 max-w-4xl mx-auto">
-          <input
-            type="text"
-            value={newMessage}
-            onChange={handleTyping}
-            placeholder="Write a message..."
-            className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-full px-6 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
-          />
-          <button
-            type="submit"
-            disabled={!newMessage.trim()}
-            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
-          >
-            <Send size={18} className="ml-1" />
-          </button>
-        </form>
-      </div>
+          {/* Input */}
+          <div className="p-4 bg-zinc-900 border-t border-zinc-800">
+            <form onSubmit={handleSendMessage} className="flex gap-2 max-w-4xl mx-auto">
+              <input
+                type="text"
+                value={newMessage}
+                onChange={handleTyping}
+                placeholder="Write a message..."
+                className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-full px-6 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+              />
+              <button
+                type="submit"
+                disabled={!newMessage.trim()}
+                className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
+              >
+                <Send size={18} className="ml-1" />
+              </button>
+            </form>
+          </div>
+        </>
+      )}
     </div>
   );
 }
