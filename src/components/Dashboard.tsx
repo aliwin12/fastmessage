@@ -3,6 +3,7 @@ import Sidebar from './Sidebar';
 import ChatArea from './ChatArea';
 import Settings from './Settings';
 import Contacts from './Contacts';
+import PublicProfileModal from './PublicProfileModal';
 import { MessageSquare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -19,6 +20,7 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
   const [chats, setChats] = useState<any[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<Record<string, any>>({});
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [selectedProfileEntity, setSelectedProfileEntity] = useState<any>(null);
 
   useEffect(() => {
     fetchChats();
@@ -195,6 +197,30 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
     }
   };
 
+  const handleAvatarClick = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+        
+      if (data) {
+        setSelectedProfileEntity({
+          id: data.id,
+          entity_type: 'user',
+          name: data.username,
+          username: data.username,
+          avatar_url: data.avatar_url,
+          banner_url: data.banner_url,
+          description: data.bio
+        });
+      }
+    } catch (e) {
+      console.error('Error fetching user profile:', e);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-zinc-950 text-white overflow-hidden">
       <Sidebar 
@@ -206,9 +232,19 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
         onChatSelect={handleChatSelect}
         onChatsUpdate={fetchChats}
         onlineUsers={onlineUsers}
+        onAvatarClick={handleAvatarClick}
       />
       
       <main className="flex-1 flex flex-col relative min-w-0">
+        {selectedProfileEntity && (
+          <PublicProfileModal
+            entity={selectedProfileEntity}
+            currentUser={user}
+            onClose={() => setSelectedProfileEntity(null)}
+            onStartChat={handleStartChat}
+            onJoinGroup={() => {}}
+          />
+        )}
         {fetchError && (
           <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-500/10 border border-red-500/50 text-red-500 px-4 py-2 rounded-lg z-50">
             Error loading chats: {fetchError}
@@ -217,9 +253,9 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
         {activeTab === 'settings' ? (
           <Settings user={user} onLogout={onLogout} onUserUpdate={onUserUpdate} />
         ) : activeTab === 'contacts' ? (
-          <Contacts user={user} onStartChat={handleStartChat} onlineUsers={onlineUsers} />
+          <Contacts user={user} onStartChat={handleStartChat} onlineUsers={onlineUsers} onAvatarClick={handleAvatarClick} />
         ) : activeChat ? (
-          <ChatArea chat={activeChat} user={user} onlineUsers={onlineUsers} />
+          <ChatArea chat={activeChat} user={user} onlineUsers={onlineUsers} onAvatarClick={handleAvatarClick} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-zinc-500">
             <MessageSquare size={64} className="mb-4 opacity-20" />

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, Hash, Users, MessageCircle, Settings as SettingsIcon, UserPlus, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-export default function ChatArea({ chat, user, onlineUsers }: any) {
+export default function ChatArea({ chat, user, onlineUsers, onAvatarClick }: any) {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
@@ -303,7 +303,16 @@ export default function ChatArea({ chat, user, onlineUsers }: any) {
       {/* Header */}
       <header className="h-16 border-b border-zinc-800 flex items-center justify-between px-6 bg-zinc-900/50 backdrop-blur-md sticky top-0 z-10">
         <div className="flex items-center gap-4">
-          <img src={chat.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${chat.id}`} alt="chat" className="w-10 h-10 rounded-full bg-zinc-800" />
+          <img 
+            src={chat.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${chat.id}`} 
+            alt="chat" 
+            className={`w-10 h-10 rounded-full bg-zinc-800 ${chat.type === 'direct' && onAvatarClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+            onClick={() => {
+              if (chat.type === 'direct' && onAvatarClick) {
+                onAvatarClick(chat.other_user_id);
+              }
+            }}
+          />
           <div>
             <h2 className="font-semibold text-lg text-white flex items-center gap-2">
               {chat.type === 'channel' ? <Hash size={16} className="text-zinc-400" /> : chat.type === 'group' ? <Users size={16} className="text-zinc-400" /> : <MessageCircle size={16} className="text-zinc-400" />}
@@ -356,7 +365,16 @@ export default function ChatArea({ chat, user, onlineUsers }: any) {
                 <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} gap-3`}>
                   {!isMe && (
                     <div className="w-8 flex-shrink-0">
-                      {showAvatar && <img src={msg.avatar_url} alt="avatar" className="w-8 h-8 rounded-full bg-zinc-800" />}
+                      {showAvatar && (
+                        <img 
+                          src={msg.avatar_url} 
+                          alt="avatar" 
+                          className={`w-8 h-8 rounded-full bg-zinc-800 ${onAvatarClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+                          onClick={() => {
+                            if (onAvatarClick) onAvatarClick(msg.sender_id);
+                          }}
+                        />
+                      )}
                     </div>
                   )}
                   <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[70%] min-w-0`}>

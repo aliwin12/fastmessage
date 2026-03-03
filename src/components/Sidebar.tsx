@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import GlobalSearch from './GlobalSearch';
 import PublicProfileModal from './PublicProfileModal';
 
-export default function Sidebar({ user, activeTab, setActiveTab, chats, activeChat, onChatSelect, onChatsUpdate, onlineUsers }: any) {
+export default function Sidebar({ user, activeTab, setActiveTab, chats, activeChat, onChatSelect, onChatsUpdate, onlineUsers, onAvatarClick }: any) {
   const [showCreate, setShowCreate] = useState(false);
   const [newChatName, setNewChatName] = useState('');
   const [newChatUsername, setNewChatUsername] = useState('');
@@ -107,7 +107,14 @@ export default function Sidebar({ user, activeTab, setActiveTab, chats, activeCh
 
       {/* User Profile Summary */}
       <div className="p-4 border-b border-zinc-800 flex items-center gap-3">
-        <img src={user.avatar_url} alt="avatar" className="w-10 h-10 rounded-full bg-zinc-800" />
+        <img 
+          src={user.avatar_url} 
+          alt="avatar" 
+          className={`w-10 h-10 rounded-full bg-zinc-800 ${onAvatarClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+          onClick={() => {
+            if (onAvatarClick) onAvatarClick(user.id);
+          }}
+        />
         <div className="flex-1 min-w-0">
           <h2 className="font-semibold text-sm truncate">{user.username}</h2>
           <p className="text-xs text-zinc-400 truncate">{user.bio}</p>
@@ -194,7 +201,17 @@ export default function Sidebar({ user, activeTab, setActiveTab, chats, activeCh
                   className={`w-full flex items-center gap-3 p-2 rounded-xl transition-colors text-left ${activeChat?.id === chat.id ? 'bg-indigo-600/10 border border-indigo-500/20' : 'hover:bg-zinc-800 border border-transparent'}`}
                 >
                   <div className="relative">
-                    <img src={chat.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${chat.id}`} alt="chat" className="w-10 h-10 rounded-full bg-zinc-800" />
+                    <img 
+                      src={chat.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${chat.id}`} 
+                      alt="chat" 
+                      className={`w-10 h-10 rounded-full bg-zinc-800 ${chat.type === 'direct' && onAvatarClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+                      onClick={(e) => {
+                        if (chat.type === 'direct' && onAvatarClick) {
+                          e.stopPropagation();
+                          onAvatarClick(chat.other_user_id);
+                        }
+                      }}
+                    />
                     {isOnline && (
                       <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-zinc-900 rounded-full"></span>
                     )}

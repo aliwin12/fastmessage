@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, UserPlus, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-export default function Contacts({ user, onStartChat, onlineUsers = {} }: any) {
+export default function Contacts({ user, onStartChat, onlineUsers = {}, onAvatarClick }: any) {
   const [contacts, setContacts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -89,7 +89,14 @@ export default function Contacts({ user, onStartChat, onlineUsers = {} }: any) {
               {searchResults.map(result => (
                 <div key={result.id} className="flex items-center justify-between p-4 bg-zinc-950 border border-zinc-800 rounded-xl">
                   <div className="flex items-center gap-4">
-                    <img src={result.avatar_url} alt="avatar" className="w-12 h-12 rounded-full bg-zinc-800" />
+                    <img 
+                      src={result.avatar_url} 
+                      alt="avatar" 
+                      className={`w-12 h-12 rounded-full bg-zinc-800 ${onAvatarClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+                      onClick={() => {
+                        if (onAvatarClick) onAvatarClick(result.id);
+                      }}
+                    />
                     <div>
                       <h4 className="font-medium text-white">{result.username}</h4>
                       <p className="text-sm text-zinc-400">{result.bio}</p>
@@ -124,7 +131,14 @@ export default function Contacts({ user, onStartChat, onlineUsers = {} }: any) {
                   <div key={contact.id} className="flex items-center justify-between p-4 bg-zinc-950 border border-zinc-800 rounded-xl hover:border-zinc-700 transition-colors">
                     <div className="flex items-center gap-4 min-w-0">
                       <div className="relative flex-shrink-0">
-                        <img src={contact.avatar_url} alt="avatar" className="w-12 h-12 rounded-full bg-zinc-800" />
+                        <img 
+                          src={contact.avatar_url} 
+                          alt="avatar" 
+                          className={`w-12 h-12 rounded-full bg-zinc-800 ${onAvatarClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+                          onClick={() => {
+                            if (onAvatarClick) onAvatarClick(contact.id);
+                          }}
+                        />
                         {isOnline && (
                           <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-zinc-950 rounded-full"></span>
                         )}
