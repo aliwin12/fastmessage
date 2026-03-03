@@ -21,6 +21,29 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
   const [onlineUsers, setOnlineUsers] = useState<Record<string, any>>({});
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [selectedProfileEntity, setSelectedProfileEntity] = useState<any>(null);
+  const [isPageVisible, setIsPageVisible] = useState(true);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsPageVisible(document.visibilityState === 'visible' && document.hasFocus());
+    };
+
+    const handleFocus = () => setIsPageVisible(true);
+    const handleBlur = () => setIsPageVisible(false);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+
+    // Initial check
+    handleVisibilityChange();
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
 
   useEffect(() => {
     fetchChats();
@@ -36,8 +59,8 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
         // Don't notify for our own messages
         if (payload.new.sender_id === user.id) return;
         
-        // Don't notify if we are currently looking at this chat
-        if (activeChat?.id === payload.new.chat_id) return;
+        // Don't notify if we are currently looking at this chat AND the page is visible/focused
+        if (activeChat?.id === payload.new.chat_id && isPageVisible) return;
 
         // Fetch sender info
         const { data: sender } = await supabase
@@ -50,6 +73,7 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
           if (Notification.permission === 'granted') {
             new Notification(`New message from ${sender.username}`, {
               body: payload.new.content,
+              icon: '/vite.svg' // Optional: add an icon if you have one
             });
           }
         }
@@ -97,7 +121,7 @@ export default function Dashboard({ session, user, onLogout, onUserUpdate }: Das
       supabase.removeChannel(globalMessageSubscription);
       supabase.removeChannel(presenceChannel);
     };
-  }, [user.id, user.status, activeChat?.id]);
+  }, [user.id, user.status, activeChat?.id, isPageVisible]);
 
   const fetchChats = async () => {
     try {
